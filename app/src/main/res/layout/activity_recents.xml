@@ -24,6 +24,28 @@
     </HorizontalScrollView>
 
     <TextView
+        android:id="@+id/emptyText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:padding="16dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/closeAllButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="96dp"
+        android:backgroundTint="#33FFFFFF"
+        android:paddingStart="28dp"
+        android:paddingEnd="28dp"
+        android:text="Close all"
+        android:textColor="#FFFFFFFF" />
+
+    <TextView
         android:id="@+id/creditText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
