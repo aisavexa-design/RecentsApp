@@ -6,11 +6,25 @@
     android:gravity="center"
     android:padding="24dp">
 
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:textSize="16sp" />
+
     <Button
         android:id="@+id/enableButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/enable_service" />
+
+    <Button
+        android:id="@+id/usageButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Usage access ON karo" />
 
     <TextView
         android:layout_width="wrap_content"
