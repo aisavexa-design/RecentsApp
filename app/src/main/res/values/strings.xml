@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Recents+</string>
+    <string name="service_description">Recents button ko custom recents screen se replace karta hai.</string>
+    <string name="enable_service">Accessibility service ON karo</string>
+    <string name="credit">Made by</string>
+    <string name="director">Director Pratik Waghmode</string>
+    <string name="no_apps">Koi recent app nahi</string>
+</resources>
