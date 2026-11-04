@@ -26,6 +26,7 @@ class RecentsActivity : AppCompatActivity() {
 
     private val white = 0xFFFFFFFF.toInt()
     private var closing = false
+    private var opening = false
 
     private lateinit var root: View
     private lateinit var scroll: HorizontalScrollView
@@ -82,7 +83,6 @@ class RecentsActivity : AppCompatActivity() {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, bounds)
 
-        // Bade image ko screen ke hisaab se chhota karke load karo, taaki RAM na bhare
         var sample = 1
         while (bounds.outWidth / (sample * 2) >= metrics.widthPixels &&
             bounds.outHeight / (sample * 2) >= metrics.heightPixels
@@ -174,48 +174,81 @@ class RecentsActivity : AppCompatActivity() {
         container.addView(card)
     }
 
-    // Tap = app kholo, upar swipe = card hatao, chhota drag = wapas jagah par
+    // Upar swipe / tap = app masking ke saath khule
+    // Left/right swipe = card recents se hat jaye
     private inner class CardTouch(private val card: View, private val app: RecentApp) : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
 
         override fun onTouch(v: View, e: MotionEvent): Boolean {
+            if (opening) return true
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    val dx = e.rawX - downX
                     val dy = e.rawY - downY
-                    if (dy < 0) card.translationY = dy
+                    card.translationX = dx
+                    card.translationY = if (dy < 0) dy else 0f
+                    card.alpha = (1f - abs(dy) / dp(400).toFloat()).coerceIn(0.3f, 1f)
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     when {
-                        dy < -dp(120) -> swipeOut(card)
-                        abs(dx) < dp(10) && abs(dy) < dp(10) -> openApp(app)
-                        else -> card.animate().translationY(0f).setDuration(150).start()
+                        abs(dx) < dp(10) && abs(dy) < dp(10) -> openWithMask(card, app)
+                        dy < -dp(30) && abs(dy) > abs(dx) -> openWithMask(card, app)
+                        abs(dx) > dp(120) -> dismissSideways(card, if (dx < 0) -1 else 1)
+                        else -> resetCard(card)
                     }
                 }
-                MotionEvent.ACTION_CANCEL -> card.animate().translationY(0f).setDuration(150).start()
+                MotionEvent.ACTION_CANCEL -> resetCard(card)
             }
             return true
         }
     }
 
-    private fun openApp(app: RecentApp) {
-        packageManager.getLaunchIntentForPackage(app.pkg)?.let {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-            startActivity(it)
-        }
-        finish()
-        overridePendingTransition(0, 0)
+    private fun resetCard(card: View) {
+        card.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(150).start()
     }
 
-    private fun swipeOut(card: View) {
+    // Masking effect: card phail kar fade hota hai, background bhi fade hota hai, phir app khulta hai
+    private fun openWithMask(card: View, app: RecentApp) {
+        if (opening) return
+        opening = true
+        val launch = packageManager.getLaunchIntentForPackage(app.pkg)
+
         card.animate()
-            .translationY(-dp(600).toFloat())
+            .scaleX(1.6f)
+            .scaleY(1.6f)
+            .alpha(0f)
+            .setDuration(260)
+            .start()
+
+        for (i in 0 until container.childCount) {
+            val other = container.getChildAt(i)
+            if (other !== card) other.animate().alpha(0f).setDuration(200).start()
+        }
+
+        root.animate()
+            .alpha(0f)
+            .setDuration(260)
+            .withEndAction {
+                launch?.let {
+                    it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                    startActivity(it)
+                }
+                finish()
+                overridePendingTransition(0, 0)
+            }
+            .start()
+    }
+
+    private fun dismissSideways(card: View, dir: Int) {
+        card.animate()
+            .translationX(dir * dp(600).toFloat())
             .alpha(0f)
             .setDuration(220)
             .withEndAction {
@@ -228,7 +261,17 @@ class RecentsActivity : AppCompatActivity() {
     private fun closeAllCards() {
         val cards = (0 until container.childCount).map { container.getChildAt(it) }
         cards.forEachIndexed { i, card ->
-            card.postDelayed({ swipeOut(card) }, i * 40L)
+            card.postDelayed({
+                card.animate()
+                    .translationY(-dp(600).toFloat())
+                    .alpha(0f)
+                    .setDuration(220)
+                    .withEndAction {
+                        container.removeView(card)
+                        checkEmpty()
+                    }
+                    .start()
+            }, i * 40L)
         }
     }
 
