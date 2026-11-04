@@ -69,10 +69,10 @@ class RecentsActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-        WindowInsetsControllerCompat(window, window.decorView).apply {
+                WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.navigationBars())
             isAppearanceLightStatusBars = false
-            isAppearanceLightNavigationBars = false
-        }
+                }
 
         setContentView(R.layout.activity_recents)
 
