@@ -62,6 +62,7 @@ class RecentsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Edge-to-edge: status bar aur navigation bar dono transparent
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -92,7 +93,7 @@ class RecentsActivity : AppCompatActivity() {
 
         gap = dp(20)
         cardW = dp(240)
-        cardH = dp(400)
+        cardH = dp(380)
         val pad = (resources.displayMetrics.widthPixels - cardW) / 2
         scroll.setPadding(pad, 0, pad, 0)
 
@@ -130,21 +131,26 @@ class RecentsActivity : AppCompatActivity() {
         animateBlur(60, 280)
     }
 
+    // Layout order: cards (upar) -> Close all (cards ke neeche) -> icons (sabse neeche)
     private fun applyInsets(insets: WindowInsetsCompat) {
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-        val scrollTop = bars.top + dp(110)
+
+        val cardsTop = bars.top + dp(96)
         (scroll.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = Gravity.TOP
-            topMargin = scrollTop
+            topMargin = cardsTop
         }
-        val cardsBottom = scrollTop + dp(56) + dp(16) + cardH
+
+        val cardsBottom = cardsTop + dp(56) + dp(16) + cardH
         (closeAllButton.layoutParams as FrameLayout.LayoutParams).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            topMargin = cardsBottom + dp(28)
+            topMargin = cardsBottom + dp(20)
         }
-        (recentRow.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(20)
+
+        (recentRow.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(16)
         (menuButton.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(8)
         (creditText.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(48)
+
         listOf<View>(scroll, closeAllButton, recentRow, menuButton, creditText).forEach { it.requestLayout() }
     }
 
@@ -309,7 +315,7 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Vertical drag = usi jagah chhota + fade (halka sa bhi). Horizontal drag = carousel scroll.
+    // Vertical drag = usi jagah chhota + fade. Horizontal drag = carousel scroll.
     private inner class CardTouch(
         private val wrap: View,
         private val card: View,
@@ -375,7 +381,6 @@ class RecentsActivity : AppCompatActivity() {
             .start()
     }
 
-    // Usi jagah par chhota hokar fade, phir recents se hat jata hai
     private fun dismissInPlace(wrap: View, base: Float) {
         wrap.animate()
             .translationY(0f)
