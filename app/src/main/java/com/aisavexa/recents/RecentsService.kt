@@ -76,8 +76,16 @@ class RecentsService : AccessibilityService() {
     }
 
     private fun openRecents() {
-        startActivity(Intent(this, RecentsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        startActivity(
+            Intent(this, RecentsActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            )
+        )
     }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(reloadReceiver) }
