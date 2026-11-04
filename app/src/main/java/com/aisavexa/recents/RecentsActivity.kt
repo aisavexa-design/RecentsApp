@@ -27,6 +27,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -47,6 +48,7 @@ class RecentsActivity : AppCompatActivity() {
     private var cardH = 0
     private var gap = 0
     private val items = mutableListOf<Item>()
+    private var recentList: List<RecentApp> = emptyList()
 
     private lateinit var root: FrameLayout
     private lateinit var bgImage: ImageView
@@ -55,16 +57,19 @@ class RecentsActivity : AppCompatActivity() {
     private lateinit var emptyText: TextView
     private lateinit var closeAllButton: Button
     private lateinit var creditText: TextView
+    private lateinit var menuButton: TextView
+    private lateinit var recentRow: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Edge-to-edge: status bar aur navigation bar dono transparent, navigation buttons visible
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.navigationBars())
             isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
 
         setContentView(R.layout.activity_recents)
@@ -76,6 +81,8 @@ class RecentsActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         closeAllButton = findViewById(R.id.closeAllButton)
         creditText = findViewById(R.id.creditText)
+        menuButton = findViewById(R.id.menuButton)
+        recentRow = findViewById(R.id.recentRow)
 
         gap = dp(20)
         cardW = dp(260)
@@ -83,13 +90,19 @@ class RecentsActivity : AppCompatActivity() {
         val pad = (resources.displayMetrics.widthPixels - cardW) / 2
         scroll.setPadding(pad, 0, pad, 0)
 
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
+            applyInsets(insets)
+            insets
+        }
+
         loadBackground()
 
-        // Blank jagah par tap = close
         root.setOnClickListener { closeWithAnimation() }
         closeAllButton.setOnClickListener { closeAllCards() }
+        menuButton.setOnClickListener { openSettings() }
 
         val apps = loadRecentApps()
+        recentList = apps ?: emptyList()
         if (apps == null) {
             showMessage("Usage access OFF hai. Yahan tap karke ON karo")
             emptyText.isClickable = true
@@ -102,12 +115,34 @@ class RecentsActivity : AppCompatActivity() {
             apps.forEach { addItem(it) }
             scroll.post { applyPager() }
         }
+        buildRecentRow()
 
         scroll.setOnScrollChangeListener { _, _, _, _, _ -> applyPager() }
 
         root.alpha = 0f
         root.animate().alpha(1f).setDuration(260).start()
         animateBlur(60, 280)
+    }
+
+    // Buttons ko status bar aur navigation bar ke upar se bachana
+    private fun applyInsets(insets: WindowInsetsCompat) {
+        val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+        (recentRow.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(24)
+        (closeAllButton.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(150)
+        (menuButton.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(8)
+        (creditText.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(48)
+        recentRow.requestLayout()
+        closeAllButton.requestLayout()
+        menuButton.requestLayout()
+        creditText.requestLayout()
+    }
+
+    private fun openSettings() {
+        if (opening) return
+        opening = true
+        startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        finish()
+        overridePendingTransition(0, 0)
     }
 
     private fun setBlur(radius: Int) {
@@ -210,6 +245,18 @@ class RecentsActivity : AppCompatActivity() {
             }
     }
 
+    // Neeche ke 4 recent icons (bina label ke)
+    private fun buildRecentRow() {
+        recentRow.removeAllViews()
+        recentList.take(4).forEach { app ->
+            val iv = ImageView(this)
+            iv.setImageDrawable(app.icon)
+            iv.isClickable = true
+            iv.setOnClickListener { zoomToApp(iv, app) }
+            recentRow.addView(iv, LinearLayout.LayoutParams(0, dp(56), 1f))
+        }
+    }
+
     // Har item: upar app ka icon, neeche card
     private fun addItem(app: RecentApp) {
         val wrap = LinearLayout(this).apply {
@@ -239,15 +286,18 @@ class RecentsActivity : AppCompatActivity() {
         container.addView(wrap)
     }
 
-    // Carousel: center card bada, bahar wale chhote aur halke
-    private fun applyPager() {
+    // Carousel: center se door hone par card chhota aur halka
+    private fun pagerDistance(wrap: View): Float {
         val centerX = scroll.scrollX + scroll.width / 2f
+        val cx = wrap.left + wrap.width / 2f
+        return (abs(cx - centerX) / (cardW + gap)).coerceAtMost(1f)
+    }
+
+    private fun applyPager() {
         items.forEach { item ->
-            val cx = item.wrap.left + item.wrap.width / 2f
-            val d = (abs(cx - centerX) / (cardW + gap)).coerceAtMost(1f)
-            val s = 1f - d * 0.12f
-            item.wrap.scaleX = s
-            item.wrap.scaleY = s
+            val d = pagerDistance(item.wrap)
+            item.wrap.scaleX = 1f - d * 0.12f
+            item.wrap.scaleY = 1f - d * 0.12f
             item.wrap.alpha = 1f - d * 0.3f
         }
     }
@@ -259,6 +309,7 @@ class RecentsActivity : AppCompatActivity() {
     ) : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
+        private var baseScale = 1f
 
         override fun onTouch(v: View, e: MotionEvent): Boolean {
             if (opening) return true
@@ -266,20 +317,31 @@ class RecentsActivity : AppCompatActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
+                    baseScale = 1f - pagerDistance(wrap) * 0.12f
                     wrap.animate().cancel()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     wrap.translationX = dx
-                    wrap.translationY = minOf(0f, dy)
+                    if (dy < 0) {
+                        // Upar khinchte hi card chhota aur fade hone lagta hai
+                        wrap.translationY = dy
+                        val f = (-dy / dp(400).toFloat()).coerceIn(0f, 1f)
+                        val s = baseScale * (1f - f * 0.25f)
+                        wrap.scaleX = s
+                        wrap.scaleY = s
+                        wrap.alpha = 1f - f * 0.7f
+                    } else {
+                        wrap.translationY = 0f
+                    }
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     when {
                         abs(dx) < dp(10) && abs(dy) < dp(10) -> zoomToApp(card, app)
-                        dy < -dp(60) && abs(dy) > abs(dx) -> dismissUp(wrap)
+                        dy < -dp(20) && abs(dy) > abs(dx) -> dismissUp(wrap)
                         abs(dx) > dp(120) -> dismissSideways(wrap, if (dx < 0) -1 else 1)
                         else -> resetWrap(wrap)
                     }
@@ -291,19 +353,35 @@ class RecentsActivity : AppCompatActivity() {
     }
 
     private fun resetWrap(wrap: View) {
-        wrap.animate().translationX(0f).translationY(0f).setDuration(150).start()
+        val d = pagerDistance(wrap)
+        wrap.animate()
+            .translationX(0f)
+            .translationY(0f)
+            .scaleX(1f - d * 0.12f)
+            .scaleY(1f - d * 0.12f)
+            .alpha(1f - d * 0.3f)
+            .setDuration(180)
+            .start()
     }
 
-    // Card screen ke bahar upar jaye: uska niche ka hissa screen ke top se bahar
+    // Pehle chhota aur fade, phir automatic upar slide karke recents se hat jaye
     private fun dismissUp(wrap: View) {
-        val loc = IntArray(2).also { wrap.getLocationOnScreen(it) }
-        val bottom = loc[1] + wrap.height * wrap.scaleY
-        val delta = -(bottom + dp(60)).toFloat()
+        val s = wrap.scaleX
         wrap.animate()
-            .translationY(wrap.translationY + delta)
-            .alpha(0f)
-            .setDuration(260)
-            .withEndAction { removeItem(wrap) }
+            .scaleX(s * 0.85f)
+            .scaleY(s * 0.85f)
+            .alpha(0.6f)
+            .setDuration(140)
+            .withEndAction {
+                wrap.animate()
+                    .translationY(-root.height.toFloat())
+                    .scaleX(s * 0.7f)
+                    .scaleY(s * 0.7f)
+                    .alpha(0f)
+                    .setDuration(220)
+                    .withEndAction { removeItem(wrap) }
+                    .start()
+            }
             .start()
     }
 
@@ -339,7 +417,8 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Tapped card poori screen tak zoom hota hai, corner hamesha rounded rehta hai
+    // Tapped item poori screen tak zoom hota hai, baaki sab fade out,
+    // phir app khulta hai
     private fun zoomToApp(from: View, app: RecentApp) {
         if (opening) return
         opening = true
@@ -367,7 +446,7 @@ class RecentsActivity : AppCompatActivity() {
         }
         root.addView(zoom, lp)
 
-        listOf<View>(scroll, closeAllButton, creditText, emptyText).forEach {
+        listOf<View>(scroll, closeAllButton, creditText, emptyText, recentRow, menuButton).forEach {
             it.animate().alpha(0f).setDuration(200).start()
         }
 
@@ -383,6 +462,7 @@ class RecentsActivity : AppCompatActivity() {
                 lp.leftMargin = lerp(startL, 0f, t).toInt()
                 lp.topMargin = lerp(startT, 0f, t).toInt()
                 zoom.layoutParams = lp
+                bg.cornerRadius = corner * (1f - t)
                 icon.alpha = (1f - t * 3f).coerceIn(0f, 1f)
             }
             addListener(object : AnimatorListenerAdapter() {
