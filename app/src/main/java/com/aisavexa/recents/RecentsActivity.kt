@@ -20,7 +20,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -55,7 +54,7 @@ class RecentsActivity : AppCompatActivity() {
     private lateinit var scroll: HorizontalScrollView
     private lateinit var container: LinearLayout
     private lateinit var emptyText: TextView
-    private lateinit var closeAllButton: Button
+    private lateinit var closeAllButton: TextView
     private lateinit var creditText: TextView
     private lateinit var menuButton: TextView
     private lateinit var recentRow: LinearLayout
@@ -63,10 +62,13 @@ class RecentsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge: status bar aur navigation bar dono transparent, navigation buttons visible
+        // Edge-to-edge: status bar aur navigation bar transparent, navigation bar ka black scrim band
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
@@ -84,9 +86,15 @@ class RecentsActivity : AppCompatActivity() {
         menuButton = findViewById(R.id.menuButton)
         recentRow = findViewById(R.id.recentRow)
 
+        // Samsung jaisa pill button
+        closeAllButton.background = GradientDrawable().apply {
+            setColor(0x33FFFFFF)
+            cornerRadius = dp(28).toFloat()
+        }
+
         gap = dp(20)
-        cardW = dp(260)
-        cardH = dp(480)
+        cardW = dp(240)
+        cardH = dp(400)
         val pad = (resources.displayMetrics.widthPixels - cardW) / 2
         scroll.setPadding(pad, 0, pad, 0)
 
@@ -124,17 +132,23 @@ class RecentsActivity : AppCompatActivity() {
         animateBlur(60, 280)
     }
 
-    // Buttons ko status bar aur navigation bar ke upar se bachana
+    // Cards ko top se neeche rakhna, Close all unke neeche, icons sabse neeche
     private fun applyInsets(insets: WindowInsetsCompat) {
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-        (recentRow.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(24)
-        (closeAllButton.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(150)
+        val scrollTop = bars.top + dp(110)
+        (scroll.layoutParams as FrameLayout.LayoutParams).apply {
+            gravity = Gravity.TOP
+            topMargin = scrollTop
+        }
+        val cardsBottom = scrollTop + dp(56) + dp(16) + cardH
+        (closeAllButton.layoutParams as FrameLayout.LayoutParams).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = cardsBottom + dp(28)
+        }
+        (recentRow.layoutParams as FrameLayout.LayoutParams).bottomMargin = bars.bottom + dp(20)
         (menuButton.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(8)
         (creditText.layoutParams as FrameLayout.LayoutParams).topMargin = bars.top + dp(48)
-        recentRow.requestLayout()
-        closeAllButton.requestLayout()
-        menuButton.requestLayout()
-        creditText.requestLayout()
+        listOf<View>(scroll, closeAllButton, recentRow, menuButton, creditText).forEach { it.requestLayout() }
     }
 
     private fun openSettings() {
@@ -302,6 +316,7 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
+    // Vertical drag = card upar (chhota + fade). Horizontal drag = carousel scroll.
     private inner class CardTouch(
         private val wrap: View,
         private val card: View,
@@ -310,6 +325,7 @@ class RecentsActivity : AppCompatActivity() {
         private var downX = 0f
         private var downY = 0f
         private var baseScale = 1f
+        private var mode = 0 // 0 = abhi tay nahi, 1 = vertical, 2 = horizontal
 
         override fun onTouch(v: View, e: MotionEvent): Boolean {
             if (opening) return true
@@ -317,32 +333,35 @@ class RecentsActivity : AppCompatActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
+                    mode = 0
                     baseScale = 1f - pagerDistance(wrap) * 0.12f
                     wrap.animate().cancel()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
-                    wrap.translationX = dx
-                    if (dy < 0) {
-                        // Upar khinchte hi card chhota aur fade hone lagta hai
-                        wrap.translationY = dy
-                        val f = (-dy / dp(400).toFloat()).coerceIn(0f, 1f)
-                        val s = baseScale * (1f - f * 0.25f)
+                    if (mode == 0 && (abs(dx) > dp(12) || abs(dy) > dp(12))) {
+                        mode = if (abs(dy) > abs(dx)) 1 else 2
+                        // Vertical lock: scroll view ko touch na chhine
+                        if (mode == 1) wrap.parent.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (mode == 1) {
+                        val up = minOf(0f, dy)
+                        wrap.translationX = 0f
+                        wrap.translationY = up
+                        val f = (-up / dp(300).toFloat()).coerceIn(0f, 1f)
+                        val s = baseScale * (1f - f * 0.3f)
                         wrap.scaleX = s
                         wrap.scaleY = s
-                        wrap.alpha = 1f - f * 0.7f
-                    } else {
-                        wrap.translationY = 0f
+                        wrap.alpha = 1f - f * 0.6f
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     when {
-                        abs(dx) < dp(10) && abs(dy) < dp(10) -> zoomToApp(card, app)
-                        dy < -dp(20) && abs(dy) > abs(dx) -> dismissUp(wrap)
-                        abs(dx) > dp(120) -> dismissSideways(wrap, if (dx < 0) -1 else 1)
+                        mode == 0 && abs(dx) < dp(12) && abs(dy) < dp(12) -> zoomToApp(card, app)
+                        mode == 1 && -dy > dp(80) -> dismissUp(wrap, baseScale)
                         else -> resetWrap(wrap)
                     }
                 }
@@ -364,30 +383,12 @@ class RecentsActivity : AppCompatActivity() {
             .start()
     }
 
-    // Pehle chhota aur fade, phir automatic upar slide karke recents se hat jaye
-    private fun dismissUp(wrap: View) {
-        val s = wrap.scaleX
+    // Usi jagah par chhota hokar fade hota hai, phir recents se hat jata hai
+    private fun dismissUp(wrap: View, base: Float) {
         wrap.animate()
-            .scaleX(s * 0.85f)
-            .scaleY(s * 0.85f)
-            .alpha(0.6f)
-            .setDuration(140)
-            .withEndAction {
-                wrap.animate()
-                    .translationY(-root.height.toFloat())
-                    .scaleX(s * 0.7f)
-                    .scaleY(s * 0.7f)
-                    .alpha(0f)
-                    .setDuration(220)
-                    .withEndAction { removeItem(wrap) }
-                    .start()
-            }
-            .start()
-    }
-
-    private fun dismissSideways(wrap: View, dir: Int) {
-        wrap.animate()
-            .translationX(dir * root.width.toFloat())
+            .translationY(wrap.translationY - dp(30))
+            .scaleX(base * 0.6f)
+            .scaleY(base * 0.6f)
             .alpha(0f)
             .setDuration(240)
             .withEndAction { removeItem(wrap) }
@@ -404,8 +405,8 @@ class RecentsActivity : AppCompatActivity() {
     private fun closeAllCards() {
         items.toList().forEachIndexed { i, item ->
             item.wrap.postDelayed({
-                if (items.any { it.wrap === item.wrap }) dismissUp(item.wrap)
-            }, i * 60L)
+                if (items.any { it.wrap === item.wrap }) dismissUp(item.wrap, item.wrap.scaleX)
+            }, i * 80L)
         }
     }
 
@@ -417,8 +418,7 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Tapped item poori screen tak zoom hota hai, baaki sab fade out,
-    // phir app khulta hai
+    // Tapped item poori screen tak zoom hota hai, baaki sab fade out, phir app khulta hai
     private fun zoomToApp(from: View, app: RecentApp) {
         if (opening) return
         opening = true
@@ -426,10 +426,11 @@ class RecentsActivity : AppCompatActivity() {
 
         val rootLoc = IntArray(2).also { root.getLocationOnScreen(it) }
         val fromLoc = IntArray(2).also { from.getLocationOnScreen(it) }
+        val parentScale = (from.parent as? View)?.scaleX ?: 1f
         val startL = (fromLoc[0] - rootLoc[0]).toFloat()
         val startT = (fromLoc[1] - rootLoc[1]).toFloat()
-        val startW = from.width.toFloat()
-        val startH = from.height.toFloat()
+        val startW = from.width * from.scaleX * parentScale
+        val startH = from.height * from.scaleY * parentScale
         val corner = dp(28).toFloat()
 
         val bg = GradientDrawable().apply {
