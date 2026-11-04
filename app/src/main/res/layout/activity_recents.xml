@@ -19,6 +19,16 @@
         android:background="#66000000"
         android:visibility="gone" />
 
+    <TextView
+        android:id="@+id/creditText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="40dp"
+        android:text="@string/director"
+        android:textColor="#88FFFFFF"
+        android:textSize="12sp" />
+
     <HorizontalScrollView
         android:id="@+id/cardScroll"
         android:layout_width="match_parent"
@@ -52,20 +62,21 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="96dp"
+        android:layout_marginBottom="170dp"
         android:backgroundTint="#33FFFFFF"
         android:paddingStart="28dp"
         android:paddingEnd="28dp"
         android:text="Close all"
         android:textColor="#FFFFFFFF" />
 
-    <TextView
-        android:id="@+id/creditText"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/recentRow"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="32dp"
-        android:text="@string/director"
-        android:textColor="#88FFFFFF"
-        android:textSize="12sp" />
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="36dp"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp" />
+
 </FrameLayout>
