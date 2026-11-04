@@ -17,7 +17,6 @@ class RecentsService : AccessibilityService() {
     private var windowManager: WindowManager? = null
     private var trigger: View? = null
 
-    // Settings screen se reload broadcast aane par overlay naye size/position se banega
     private val reloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             removeTrigger()
@@ -43,14 +42,18 @@ class RecentsService : AccessibilityService() {
     private fun addTrigger() {
         if (trigger != null) return
 
-        val w = dp(Prefs.getInt(this, Prefs.KEY_W, Prefs.DEF_W))
-        val h = dp(Prefs.getInt(this, Prefs.KEY_H, Prefs.DEF_H))
-        val offX = dp(Prefs.getInt(this, Prefs.KEY_X, Prefs.DEF_X))
-        val offY = dp(Prefs.getInt(this, Prefs.KEY_Y, Prefs.DEF_Y))
+        val density = resources.displayMetrics.density
+        val w = (Prefs.getW(this) * density).toInt()
+        val h = (Prefs.getH(this) * density).toInt()
+        val x = (Prefs.getX(this) * density).toInt()
+        val y = (Prefs.getY(this) * density).toInt()
+        val calibrating = Prefs.isCalibrating(this)
 
         val view = View(this).apply {
             setOnClickListener { openRecents() }
+            if (calibrating) setBackgroundColor(0xAAFF3B30.toInt())
         }
+
         val params = WindowManager.LayoutParams(
             w,
             h,
@@ -59,9 +62,9 @@ class RecentsService : AccessibilityService() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            x = offX
-            y = offY
+            gravity = Gravity.BOTTOM or Gravity.START
+            this.x = x
+            this.y = y
         }
         windowManager?.addView(view, params)
         trigger = view
@@ -75,8 +78,6 @@ class RecentsService : AccessibilityService() {
     private fun openRecents() {
         startActivity(Intent(this, RecentsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(reloadReceiver) }
