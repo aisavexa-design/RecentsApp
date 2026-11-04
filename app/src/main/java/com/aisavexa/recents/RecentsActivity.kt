@@ -62,17 +62,16 @@ class RecentsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge: status bar aur navigation bar dono transparent
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
-                WindowInsetsControllerCompat(window, window.decorView).apply {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.navigationBars())
             isAppearanceLightStatusBars = false
-                }
+        }
 
         setContentView(R.layout.activity_recents)
 
@@ -109,14 +108,15 @@ class RecentsActivity : AppCompatActivity() {
         menuButton.setOnClickListener { openSettings() }
 
         val apps = loadRecentApps()
-        recentList = apps ?: emptyList()
-        if (apps == null) {
-            showMessage("Usage access OFF hai. Yahan tap karke ON karo")
-            emptyText.isClickable = true
-            emptyText.setOnClickListener { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
-            closeAllButton.visibility = View.GONE
-        } else if (apps.isEmpty()) {
-            showMessage("Koi recent app nahi")
+        recentList = apps
+        if (apps.isEmpty()) {
+            if (!hasUsageAccess()) {
+                showMessage("Usage access OFF hai. Yahan tap karke ON karo")
+                emptyText.isClickable = true
+                emptyText.setOnClickListener { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+            } else {
+                showMessage("Koi recent app nahi")
+            }
             closeAllButton.visibility = View.GONE
         } else {
             apps.forEach { addItem(it) }
@@ -131,7 +131,6 @@ class RecentsActivity : AppCompatActivity() {
         animateBlur(60, 280)
     }
 
-    // Layout order: cards (upar) -> Close all (cards ke neeche) -> icons (sabse neeche)
     private fun applyInsets(insets: WindowInsetsCompat) {
         val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
@@ -221,9 +220,9 @@ class RecentsActivity : AppCompatActivity() {
         ) == AppOpsManager.MODE_ALLOWED
     }
 
-    private fun loadRecentApps(): List<RecentApp>? {
-        if (!hasUsageAccess()) return null
-
+    // Usage Stats se last 2 din ke foreground apps (sabse naya pehle)
+    private fun usageRecentPkgs(): List<String> {
+        if (!hasUsageAccess()) return emptyList()
         val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
         val events = usm.queryEvents(now - 2 * dayMs, now)
@@ -237,21 +236,27 @@ class RecentsActivity : AppCompatActivity() {
                 if (event.timeStamp > prev) lastUsed[event.packageName] = event.timeStamp
             }
         }
+        return lastUsed.entries.sortedByDescending { it.value }.map { it.key }
+    }
 
+    // Priority: Accessibility se asli use (real time) pehle, phir Usage Stats se purani history.
+    // Sirf launcher wale apps hi dikhenge, taaki system services na aayein.
+    private fun loadRecentApps(): List<RecentApp> {
         val pm = packageManager
+        val launchable = pm.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).map { it.activityInfo.packageName }.toSet()
+
         val homePkg = pm.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
         )?.activityInfo?.packageName
 
-        return lastUsed.entries
-            .sortedByDescending { it.value }
-            .map { it.key }
-            .filter {
-                it != packageName &&
-                    it != homePkg &&
-                    it != "com.android.systemui" &&
-                    pm.getLaunchIntentForPackage(it) != null
-            }
+        val ordered = LinkedHashSet<String>()
+        ordered.addAll(Prefs.getRecentPkgs(this))
+        ordered.addAll(usageRecentPkgs())
+
+        return ordered.asSequence()
+            .filter { it != packageName && it != homePkg && it != "com.android.systemui" && it in launchable }
             .take(10)
             .mapNotNull { pkg ->
                 runCatching {
@@ -259,6 +264,7 @@ class RecentsActivity : AppCompatActivity() {
                     RecentApp(pkg, pm.getApplicationLabel(info).toString(), pm.getApplicationIcon(info))
                 }.getOrNull()
             }
+            .toList()
     }
 
     private fun buildRecentRow() {
