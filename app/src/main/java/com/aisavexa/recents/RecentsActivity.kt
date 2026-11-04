@@ -3,6 +3,8 @@ package com.aisavexa.recents
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -41,6 +43,8 @@ class RecentsActivity : AppCompatActivity() {
         emptyText = findViewById(R.id.emptyText)
         closeAllButton = findViewById(R.id.closeAllButton)
 
+        loadBackground()
+
         root.setOnClickListener { closeWithAnimation() }
         closeAllButton.setOnClickListener { closeAllCards() }
 
@@ -63,6 +67,35 @@ class RecentsActivity : AppCompatActivity() {
         root.alpha = 0f
         root.translationY = dp(60).toFloat()
         root.animate().alpha(1f).translationY(0f).setDuration(260).start()
+    }
+
+    private fun loadBackground() {
+        val bg = findViewById<ImageView>(R.id.bgImage)
+        val dim = findViewById<View>(R.id.bgDim)
+        val file = Prefs.bgFile(this)
+        if (!file.exists()) {
+            bg.visibility = View.GONE
+            dim.visibility = View.GONE
+            return
+        }
+        val metrics = resources.displayMetrics
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, bounds)
+
+        // Bade image ko screen ke hisaab se chhota karke load karo, taaki RAM na bhare
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= metrics.widthPixels &&
+            bounds.outHeight / (sample * 2) >= metrics.heightPixels
+        ) {
+            sample *= 2
+        }
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        bg.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath, opts))
+        bg.visibility = View.VISIBLE
+        dim.visibility = View.VISIBLE
     }
 
     private fun showMessage(text: String) {
