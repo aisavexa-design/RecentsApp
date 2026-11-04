@@ -33,7 +33,7 @@ class RecentsActivity : AppCompatActivity() {
 
     private val white = 0xFFFFFFFF.toInt()
     private val dayMs = 24L * 3600_000L
-    private val foregroundEvent = 1 // MOVE_TO_FOREGROUND (ACTIVITY_RESUMED ki bhi same value hai)
+    private val foregroundEvent = 1
 
     private var closing = false
     private var opening = false
@@ -85,14 +85,12 @@ class RecentsActivity : AppCompatActivity() {
         scroll.setOnScrollChangeListener { _, _, _, _, _ -> applyPagerEffect() }
         scroll.post { applyPagerEffect() }
 
-        // Fade in + background blur in
+        // Seedha fade-in + blur-in, koi slide nahi
         root.alpha = 0f
-        root.translationY = dp(60).toFloat()
-        root.animate().alpha(1f).translationY(0f).setDuration(260).start()
+        root.animate().alpha(1f).setDuration(260).start()
         animateBlur(60, 280)
     }
 
-    // Peeche wali screen ko blur karta hai (Android 12+)
     private fun setBlur(radius: Int) {
         blur = radius
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -202,7 +200,7 @@ class RecentsActivity : AppCompatActivity() {
                 setColor(0xFF2A2A2A.toInt())
                 cornerRadius = dp(24).toFloat()
             }
-            layoutParams = LinearLayout.LayoutParams(dp(220), dp(380)).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(220), dp(340)).apply {
                 marginEnd = dp(16)
             }
             isClickable = true
@@ -222,7 +220,6 @@ class RecentsActivity : AppCompatActivity() {
         container.addView(card)
     }
 
-    // Close all ke neeche: last 4 used apps ki row
     private fun buildRecentRow() {
         recentRow.removeAllViews()
         if (recentList.isEmpty()) return
@@ -252,7 +249,9 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Tap ya upar swipe = zoom karke app khule. Left/right swipe = card hat jaye.
+    // Tap = zoom karke app khule
+    // Upar halka swipe = card upar slide hoke hat jaye
+    // Left/right swipe = card side mein hat jaye
     private inner class CardTouch(private val card: View, private val app: RecentApp) : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
@@ -276,7 +275,7 @@ class RecentsActivity : AppCompatActivity() {
                     val dy = e.rawY - downY
                     when {
                         abs(dx) < dp(10) && abs(dy) < dp(10) -> openWithZoom(card, app)
-                        dy < -dp(30) && abs(dy) > abs(dx) -> openWithZoom(card, app)
+                        dy < -dp(30) && abs(dy) > abs(dx) -> dismissUp(card)
                         abs(dx) > dp(120) -> dismissSideways(card, if (dx < 0) -1 else 1)
                         else -> resetCard(card)
                     }
@@ -291,13 +290,37 @@ class RecentsActivity : AppCompatActivity() {
         card.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(150).start()
     }
 
+    // Upar slide + fade, phir recents se hat jaye
+    private fun dismissUp(card: View) {
+        card.animate()
+            .translationY(-dp(600).toFloat())
+            .alpha(0f)
+            .setDuration(220)
+            .withEndAction {
+                container.removeView(card)
+                checkEmpty()
+            }
+            .start()
+    }
+
+    private fun dismissSideways(card: View, dir: Int) {
+        card.animate()
+            .translationX(dir * dp(600).toFloat())
+            .alpha(0f)
+            .setDuration(220)
+            .withEndAction {
+                container.removeView(card)
+                checkEmpty()
+            }
+            .start()
+    }
+
     // Tile poore screen tak zoom hoke app khulne se pehle fill karta hai
     private fun openWithZoom(from: View, app: RecentApp) {
         if (opening) return
         opening = true
         val launch = packageManager.getLaunchIntentForPackage(app.pkg)
 
-        // Pehle position aur scale reset karke sahi jagah naapo
         from.translationX = 0f
         from.translationY = 0f
         from.scaleX = 1f
@@ -341,32 +364,10 @@ class RecentsActivity : AppCompatActivity() {
         return cur
     }
 
-    private fun dismissSideways(card: View, dir: Int) {
-        card.animate()
-            .translationX(dir * dp(600).toFloat())
-            .alpha(0f)
-            .setDuration(220)
-            .withEndAction {
-                container.removeView(card)
-                checkEmpty()
-            }
-            .start()
-    }
-
     private fun closeAllCards() {
         val cards = (0 until container.childCount).map { container.getChildAt(it) }
         cards.forEachIndexed { i, card ->
-            card.postDelayed({
-                card.animate()
-                    .translationY(-dp(600).toFloat())
-                    .alpha(0f)
-                    .setDuration(220)
-                    .withEndAction {
-                        container.removeView(card)
-                        checkEmpty()
-                    }
-                    .start()
-            }, i * 40L)
+            card.postDelayed({ dismissUp(card) }, i * 40L)
         }
     }
 
@@ -378,7 +379,6 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Pager effect: center wala card bada, bahar wale chhote aur halke
     private fun applyPagerEffect() {
         val viewportCenter = scroll.scrollX + scroll.width / 2f
         for (i in 0 until container.childCount) {
@@ -392,13 +392,12 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Fade out + blur out, phir band
+    // Seedha fade-out + blur-out, koi slide nahi
     private fun closeWithAnimation() {
         if (closing) return
         closing = true
         root.animate()
             .alpha(0f)
-            .translationY(dp(60).toFloat())
             .setDuration(220)
             .withEndAction {
                 finish()
