@@ -16,6 +16,7 @@ class RecentsService : AccessibilityService() {
 
     private var windowManager: WindowManager? = null
     private var trigger: View? = null
+    private val excluded = mutableSetOf<String>()
 
     private val reloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -33,10 +34,31 @@ class RecentsService : AccessibilityService() {
             IntentFilter(Prefs.ACTION_RELOAD),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        computeExcluded()
         addTrigger()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    // Launcher, keyboard, system UI aur apni app ko recent list mein record nahi karna
+    private fun computeExcluded() {
+        val pm = packageManager
+        excluded.clear()
+        pm.resolveActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0)
+            ?.activityInfo?.packageName?.let { excluded.add(it) }
+        pm.queryIntentServices(Intent("android.view.InputMethod"), 0)
+            .forEach { excluded.add(it.serviceInfo.packageName) }
+        excluded.add(packageName)
+        excluded.add("com.android.systemui")
+        excluded.add("android")
+    }
+
+    // Jab bhi koi app screen par aati hai, uska naam Prefs mein turant save hota hai
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg in excluded) return
+        Prefs.addRecentPkg(this, pkg)
+    }
+
     override fun onInterrupt() {}
 
     private fun addTrigger() {
@@ -84,8 +106,6 @@ class RecentsService : AccessibilityService() {
             )
         )
     }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(reloadReceiver) }
