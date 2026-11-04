@@ -29,24 +29,14 @@
         android:textColor="#88FFFFFF"
         android:textSize="12sp" />
 
-    <HorizontalScrollView
-        android:id="@+id/cardScroll"
+    <FrameLayout
+        android:id="@+id/cardStack"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top"
-        android:layout_marginTop="120dp"
+        android:layout_height="440dp"
+        android:layout_gravity="center"
+        android:layout_marginBottom="120dp"
         android:clipChildren="false"
-        android:clipToPadding="false"
-        android:paddingStart="32dp"
-        android:paddingEnd="32dp"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/cardContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
+        android:clipToPadding="false" />
 
     <TextView
         android:id="@+id/emptyText"
