@@ -15,11 +15,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.widget.HorizontalScrollView
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -39,14 +40,15 @@ class RecentsActivity : AppCompatActivity() {
     private var opening = false
     private var blur = 0
     private var recentList: List<RecentApp> = emptyList()
+    private val stack = mutableListOf<View>() // index 0 = sabse upar wala card
 
-    private lateinit var root: View
+    private lateinit var root: FrameLayout
     private lateinit var bgImage: ImageView
-    private lateinit var scroll: HorizontalScrollView
-    private lateinit var container: LinearLayout
+    private lateinit var cardStack: FrameLayout
     private lateinit var emptyText: TextView
-    private lateinit var closeAllButton: View
+    private lateinit var closeAllButton: Button
     private lateinit var recentRow: LinearLayout
+    private lateinit var creditText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,13 +56,11 @@ class RecentsActivity : AppCompatActivity() {
 
         root = findViewById(R.id.root)
         bgImage = findViewById(R.id.bgImage)
-        scroll = findViewById(R.id.cardScroll)
-        container = findViewById(R.id.cardContainer)
+        cardStack = findViewById(R.id.cardStack)
         emptyText = findViewById(R.id.emptyText)
         closeAllButton = findViewById(R.id.closeAllButton)
         recentRow = findViewById(R.id.recentRow)
-        recentRow.clipChildren = false
-        recentRow.clipToPadding = false
+        creditText = findViewById(R.id.creditText)
 
         loadBackground()
 
@@ -78,14 +78,10 @@ class RecentsActivity : AppCompatActivity() {
             showMessage("Koi recent app nahi")
             closeAllButton.visibility = View.GONE
         } else {
-            apps.forEach { addCard(it) }
+            buildStack(apps)
         }
         buildRecentRow()
 
-        scroll.setOnScrollChangeListener { _, _, _, _, _ -> applyPagerEffect() }
-        scroll.post { applyPagerEffect() }
-
-        // Seedha fade-in + blur-in, koi slide nahi
         root.alpha = 0f
         root.animate().alpha(1f).setDuration(260).start()
         animateBlur(60, 280)
@@ -191,7 +187,19 @@ class RecentsActivity : AppCompatActivity() {
             }
     }
 
-    private fun addCard(app: RecentApp) {
+    // Stack: sabse recent app upar, baaki peeche chhote hokar
+    private fun buildStack(apps: List<RecentApp>) {
+        cardStack.removeAllViews()
+        stack.clear()
+        apps.forEach { app ->
+            val card = makeCard(app)
+            stack.add(card)
+            cardStack.addView(card)
+        }
+        layoutStack(animate = false)
+    }
+
+    private fun makeCard(app: RecentApp): View {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -200,14 +208,12 @@ class RecentsActivity : AppCompatActivity() {
                 setColor(0xFF2A2A2A.toInt())
                 cornerRadius = dp(24).toFloat()
             }
-            layoutParams = LinearLayout.LayoutParams(dp(220), dp(340)).apply {
-                marginEnd = dp(16)
-            }
+            layoutParams = FrameLayout.LayoutParams(dp(260), dp(420), Gravity.CENTER)
             isClickable = true
         }
         card.addView(
             ImageView(this).apply { setImageDrawable(app.icon) },
-            LinearLayout.LayoutParams(dp(72), dp(72))
+            LinearLayout.LayoutParams(dp(80), dp(80))
         )
         card.addView(TextView(this).apply {
             text = app.label
@@ -217,44 +223,54 @@ class RecentsActivity : AppCompatActivity() {
             setPadding(0, dp(16), 0, 0)
         })
         card.setOnTouchListener(CardTouch(card, app))
-        container.addView(card)
+        return card
     }
 
+    private fun layoutStack(animate: Boolean = true) {
+        val n = stack.size
+        stack.forEachIndexed { i, card ->
+            val ty = dp(16 * i).toFloat()
+            val s = (1f - i * 0.06f).coerceAtLeast(0.6f)
+            val a = if (i < 4) 1f else 0f
+            card.elevation = dp(2 * (n - i)).toFloat()
+            if (animate) {
+                card.animate()
+                    .translationX(0f)
+                    .translationY(ty)
+                    .scaleX(s)
+                    .scaleY(s)
+                    .alpha(a)
+                    .setDuration(220)
+                    .start()
+            } else {
+                card.translationX = 0f
+                card.translationY = ty
+                card.scaleX = s
+                card.scaleY = s
+                card.alpha = a
+            }
+        }
+    }
+
+    // Neeche ka row: sirf icon, label nahi
     private fun buildRecentRow() {
         recentRow.removeAllViews()
-        if (recentList.isEmpty()) return
         recentList.take(4).forEach { app ->
-            val tile = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(dp(4), dp(8), dp(4), dp(8))
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                isClickable = true
-            }
-            tile.addView(
-                ImageView(this).apply { setImageDrawable(app.icon) },
-                LinearLayout.LayoutParams(dp(52), dp(52))
-            )
-            tile.addView(TextView(this).apply {
-                text = app.label
-                setTextColor(white)
-                textSize = 11f
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER
-                setPadding(0, dp(6), 0, 0)
-            })
-            tile.setOnClickListener { openWithZoom(tile, app) }
-            recentRow.addView(tile)
+            val iv = ImageView(this)
+            iv.setImageDrawable(app.icon)
+            iv.isClickable = true
+            iv.setOnClickListener { zoomToApp(iv, app) }
+            recentRow.addView(iv, LinearLayout.LayoutParams(0, dp(56), 1f))
         }
     }
 
     // Tap = zoom karke app khule
-    // Upar halka swipe = card upar slide hoke hat jaye
+    // Upar swipe = card screen ke bahar upar chala jaye
     // Left/right swipe = card side mein hat jaye
     private inner class CardTouch(private val card: View, private val app: RecentApp) : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
+        private var baseY = 0f
 
         override fun onTouch(v: View, e: MotionEvent): Boolean {
             if (opening) return true
@@ -262,137 +278,139 @@ class RecentsActivity : AppCompatActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
+                    baseY = card.translationY
+                    card.animate().cancel()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     card.translationX = dx
-                    card.translationY = if (dy < 0) dy else 0f
-                    card.alpha = (1f - abs(dy) / dp(400).toFloat()).coerceIn(0.3f, 1f)
+                    card.translationY = baseY + dy
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     when {
-                        abs(dx) < dp(10) && abs(dy) < dp(10) -> openWithZoom(card, app)
-                        dy < -dp(30) && abs(dy) > abs(dx) -> dismissUp(card)
+                        abs(dx) < dp(10) && abs(dy) < dp(10) -> zoomToApp(card, app)
+                        dy < -dp(60) && abs(dy) > abs(dx) -> dismissUp(card)
                         abs(dx) > dp(120) -> dismissSideways(card, if (dx < 0) -1 else 1)
-                        else -> resetCard(card)
+                        else -> layoutStack()
                     }
                 }
-                MotionEvent.ACTION_CANCEL -> resetCard(card)
+                MotionEvent.ACTION_CANCEL -> layoutStack()
             }
             return true
         }
     }
 
-    private fun resetCard(card: View) {
-        card.animate().translationX(0f).translationY(0f).alpha(1f).setDuration(150).start()
-    }
-
-    // Upar slide + fade, phir recents se hat jaye
+    // Card ko itna upar le jao ki uska niche wala hissa screen ke top se bahar ho jaye
     private fun dismissUp(card: View) {
+        val loc = IntArray(2).also { card.getLocationOnScreen(it) }
+        val bottom = loc[1] + card.height * card.scaleY
+        val delta = -bottom - dp(40)
         card.animate()
-            .translationY(-dp(600).toFloat())
+            .translationY(card.translationY + delta)
             .alpha(0f)
-            .setDuration(220)
-            .withEndAction {
-                container.removeView(card)
-                checkEmpty()
-            }
+            .setDuration(260)
+            .withEndAction { removeCard(card) }
             .start()
     }
 
     private fun dismissSideways(card: View, dir: Int) {
         card.animate()
-            .translationX(dir * dp(600).toFloat())
+            .translationX(dir * root.width.toFloat())
             .alpha(0f)
-            .setDuration(220)
-            .withEndAction {
-                container.removeView(card)
-                checkEmpty()
-            }
+            .setDuration(240)
+            .withEndAction { removeCard(card) }
             .start()
     }
 
-    // Tile poore screen tak zoom hoke app khulne se pehle fill karta hai
-    private fun openWithZoom(from: View, app: RecentApp) {
-        if (opening) return
-        opening = true
-        val launch = packageManager.getLaunchIntentForPackage(app.pkg)
-
-        from.translationX = 0f
-        from.translationY = 0f
-        from.scaleX = 1f
-        from.scaleY = 1f
-
-        val rootLoc = IntArray(2).also { root.getLocationOnScreen(it) }
-        val fromLoc = IntArray(2).also { from.getLocationOnScreen(it) }
-        val dx = (rootLoc[0] + root.width / 2f) - (fromLoc[0] + from.width / 2f)
-        val dy = (rootLoc[1] + root.height / 2f) - (fromLoc[1] + from.height / 2f)
-        val scale = max(root.width / from.width.toFloat(), root.height / from.height.toFloat())
-
-        topChildOf(from).bringToFront()
-        for (i in 0 until container.childCount) {
-            val other = container.getChildAt(i)
-            if (other !== from) other.animate().alpha(0f).setDuration(200).start()
-        }
-        recentRow.animate().alpha(0f).setDuration(200).start()
-        closeAllButton.animate().alpha(0f).setDuration(200).start()
-
-        from.animate()
-            .translationX(dx)
-            .translationY(dy)
-            .scaleX(scale)
-            .scaleY(scale)
-            .alpha(1f)
-            .setDuration(320)
-            .withEndAction {
-                launch?.let {
-                    it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                    startActivity(it)
-                }
-                finish()
-                overridePendingTransition(0, 0)
-            }
-            .start()
-    }
-
-    private fun topChildOf(v: View): View {
-        var cur = v
-        while (cur.parent is View && cur.parent !== root) cur = cur.parent as View
-        return cur
+    private fun removeCard(card: View) {
+        stack.remove(card)
+        cardStack.removeView(card)
+        layoutStack()
+        checkEmpty()
     }
 
     private fun closeAllCards() {
-        val cards = (0 until container.childCount).map { container.getChildAt(it) }
-        cards.forEachIndexed { i, card ->
-            card.postDelayed({ dismissUp(card) }, i * 40L)
+        stack.toList().forEachIndexed { i, card ->
+            card.postDelayed({ if (card in stack) dismissUp(card) }, i * 60L)
         }
     }
 
     private fun checkEmpty() {
-        if (container.childCount == 0) {
+        if (stack.isEmpty()) {
             showMessage("Sab recent apps clear ho gaye")
             closeAllButton.visibility = View.GONE
             root.postDelayed({ closeWithAnimation() }, 500)
         }
     }
 
-    private fun applyPagerEffect() {
-        val viewportCenter = scroll.scrollX + scroll.width / 2f
-        for (i in 0 until container.childCount) {
-            val card = container.getChildAt(i)
-            val cardCenter = card.left + card.width / 2f
-            val dist = (abs(cardCenter - viewportCenter) / scroll.width.toFloat()).coerceAtMost(1f)
-            val scale = 1f - dist * 0.25f
-            card.scaleX = scale
-            card.scaleY = scale
-            card.alpha = 1f - dist * 0.5f
+    // Tile/card poori screen tak zoom hoti hai, baaki sab fade out,
+    // phir wahi zoom app ki screen ban kar app khulta hai
+    private fun zoomToApp(from: View, app: RecentApp) {
+        if (opening) return
+        opening = true
+        val launch = packageManager.getLaunchIntentForPackage(app.pkg)
+
+        val rootLoc = IntArray(2).also { root.getLocationOnScreen(it) }
+        val fromLoc = IntArray(2).also { from.getLocationOnScreen(it) }
+        val startL = (fromLoc[0] - rootLoc[0]).toFloat()
+        val startT = (fromLoc[1] - rootLoc[1]).toFloat()
+        val startW = max(1f, from.width * from.scaleX)
+        val startH = max(1f, from.height * from.scaleY)
+        val corner = dp(24).toFloat()
+
+        val bg = GradientDrawable().apply {
+            setColor(0xFF2A2A2A.toInt())
+            cornerRadius = corner
+        }
+        val zoom = FrameLayout(this).apply { background = bg }
+        val icon = ImageView(this).apply { setImageDrawable(app.icon) }
+        zoom.addView(icon, FrameLayout.LayoutParams(dp(80), dp(80), Gravity.CENTER))
+
+        val lp = FrameLayout.LayoutParams(startW.toInt(), startH.toInt(), Gravity.TOP or Gravity.START).apply {
+            leftMargin = startL.toInt()
+            topMargin = startT.toInt()
+        }
+        root.addView(zoom, lp)
+
+        listOf<View>(cardStack, recentRow, closeAllButton, creditText, emptyText).forEach {
+            it.animate().alpha(0f).setDuration(200).start()
+        }
+
+        val rootW = root.width.toFloat()
+        val rootH = root.height.toFloat()
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 360
+            interpolator = AccelerateDecelerateInterpolator()
+            addUpdateListener { a ->
+                val t = a.animatedFraction
+                lp.width = lerp(startW, rootW, t).toInt()
+                lp.height = lerp(startH, rootH, t).toInt()
+                lp.leftMargin = lerp(startL, 0f, t).toInt()
+                lp.topMargin = lerp(startT, 0f, t).toInt()
+                zoom.layoutParams = lp
+                bg.cornerRadius = corner * (1f - t)
+                icon.alpha = (1f - t * 3f).coerceIn(0f, 1f)
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    launch?.let {
+                        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                        startActivity(it)
+                    }
+                    finish()
+                    overridePendingTransition(0, 0)
+                }
+            })
+            start()
         }
     }
 
-    // Seedha fade-out + blur-out, koi slide nahi
+    private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+    // Fade-out + blur-out, koi slide nahi
     private fun closeWithAnimation() {
         if (closing) return
         closing = true
