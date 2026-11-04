@@ -11,6 +11,7 @@ object Prefs {
     const val KEY_X = "overlay_x_dp"
     const val KEY_Y = "overlay_y_dp"
     const val KEY_CAL = "calibrating"
+    const val KEY_RECENT = "recent_pkgs"
 
     const val DEF_W = 120
     const val DEF_H = 48
@@ -18,6 +19,7 @@ object Prefs {
 
     private const val FILE = "recents_prefs"
     private const val BG_FILE = "recents_bg.jpg"
+    private const val MAX_RECENT = 15
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
@@ -26,7 +28,6 @@ object Prefs {
         return m.widthPixels / m.density
     }
 
-    // Samsung 3-button bar mein Recents button left se ~1/6 par hota hai
     fun defaultX(ctx: Context): Int =
         (screenWidthDp(ctx) / 6f - DEF_W / 2f).toInt().coerceAtLeast(0)
 
@@ -49,6 +50,16 @@ object Prefs {
         prefs(ctx).edit()
             .remove(KEY_W).remove(KEY_H).remove(KEY_X).remove(KEY_Y)
             .apply()
+    }
+
+    // Asli use se bane recent apps ka order (sabse naya pehle)
+    fun getRecentPkgs(ctx: Context): List<String> =
+        prefs(ctx).getString(KEY_RECENT, "").orEmpty().split(",").filter { it.isNotEmpty() }
+
+    fun addRecentPkg(ctx: Context, pkg: String) {
+        val list = getRecentPkgs(ctx).filter { it != pkg }.toMutableList()
+        list.add(0, pkg)
+        prefs(ctx).edit().putString(KEY_RECENT, list.take(MAX_RECENT).joinToString(",")).apply()
     }
 
     fun bgFile(ctx: Context): File = File(ctx.filesDir, BG_FILE)
