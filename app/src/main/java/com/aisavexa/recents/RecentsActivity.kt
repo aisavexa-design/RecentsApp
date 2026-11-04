@@ -63,11 +63,10 @@ class RecentsActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        WindowInsetsControllerCompat(window, window.decorView).apply {
+                WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.navigationBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BY_SWIPE
             isAppearanceLightStatusBars = false
-        }
+                }
 
         setContentView(R.layout.activity_recents)
 
