@@ -59,14 +59,13 @@ class RecentsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Full screen: status bar transparent, navigation bar hidden, status icons visible
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-                WindowInsetsControllerCompat(window, window.decorView).apply {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.navigationBars())
             isAppearanceLightStatusBars = false
-                }
+        }
 
         setContentView(R.layout.activity_recents)
 
@@ -86,6 +85,7 @@ class RecentsActivity : AppCompatActivity() {
 
         loadBackground()
 
+        // Blank jagah par tap = close
         root.setOnClickListener { closeWithAnimation() }
         closeAllButton.setOnClickListener { closeAllCards() }
 
@@ -210,11 +210,13 @@ class RecentsActivity : AppCompatActivity() {
             }
     }
 
-    // Har item: upar app ka icon, neeche card (original Samsung jaisa)
+    // Har item: upar app ka icon, neeche card
     private fun addItem(app: RecentApp) {
         val wrap = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(cardW, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 marginEnd = gap
             }
@@ -237,7 +239,7 @@ class RecentsActivity : AppCompatActivity() {
         container.addView(wrap)
     }
 
-    // Carousel effect: center card bada, bahar wale chhote aur halke
+    // Carousel: center card bada, bahar wale chhote aur halke
     private fun applyPager() {
         val centerX = scroll.scrollX + scroll.width / 2f
         items.forEach { item ->
@@ -267,15 +269,17 @@ class RecentsActivity : AppCompatActivity() {
                     wrap.animate().cancel()
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    wrap.translationX = e.rawX - downX
-                    wrap.translationY = minOf(0f, e.rawY - downY)
+                    val dx = e.rawX - downX
+                    val dy = e.rawY - downY
+                    wrap.translationX = dx
+                    wrap.translationY = minOf(0f, dy)
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     when {
                         abs(dx) < dp(10) && abs(dy) < dp(10) -> zoomToApp(card, app)
-                        dy < -dp(80) && abs(dy) > abs(dx) -> dismissUp(wrap)
+                        dy < -dp(60) && abs(dy) > abs(dx) -> dismissUp(wrap)
                         abs(dx) > dp(120) -> dismissSideways(wrap, if (dx < 0) -1 else 1)
                         else -> resetWrap(wrap)
                     }
@@ -290,11 +294,11 @@ class RecentsActivity : AppCompatActivity() {
         wrap.animate().translationX(0f).translationY(0f).setDuration(150).start()
     }
 
-    // Card screen ke bahar upar chala jaye
+    // Card screen ke bahar upar jaye: uska niche ka hissa screen ke top se bahar
     private fun dismissUp(wrap: View) {
         val loc = IntArray(2).also { wrap.getLocationOnScreen(it) }
         val bottom = loc[1] + wrap.height * wrap.scaleY
-        val delta = -(bottom + dp(40))
+        val delta = -(bottom + dp(60)).toFloat()
         wrap.animate()
             .translationY(wrap.translationY + delta)
             .alpha(0f)
@@ -335,8 +339,7 @@ class RecentsActivity : AppCompatActivity() {
         }
     }
 
-    // Tapped card poori screen tak zoom hota hai, baaki sab fade out,
-    // phir app khulta hai
+    // Tapped card poori screen tak zoom hota hai, corner hamesha rounded rehta hai
     private fun zoomToApp(from: View, app: RecentApp) {
         if (opening) return
         opening = true
@@ -380,7 +383,6 @@ class RecentsActivity : AppCompatActivity() {
                 lp.leftMargin = lerp(startL, 0f, t).toInt()
                 lp.topMargin = lerp(startT, 0f, t).toInt()
                 zoom.layoutParams = lp
-                bg.cornerRadius = corner * (1f - t)
                 icon.alpha = (1f - t * 3f).coerceIn(0f, 1f)
             }
             addListener(object : AnimatorListenerAdapter() {
