@@ -47,7 +47,7 @@
         android:id="@+id/cardScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical"
+        android:layout_gravity="top"
         android:clipChildren="false"
         android:clipToPadding="false"
         android:scrollbars="none">
@@ -71,17 +71,21 @@
         android:textSize="16sp"
         android:visibility="gone" />
 
-    <Button
+    <TextView
         android:id="@+id/closeAllButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="150dp"
-        android:backgroundTint="#33FFFFFF"
-        android:paddingStart="36dp"
-        android:paddingEnd="36dp"
+        android:layout_gravity="top|center_horizontal"
+        android:gravity="center"
+        android:minWidth="200dp"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp"
         android:text="Close all"
-        android:textColor="#FFFFFFFF" />
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold" />
 
     <LinearLayout
         android:id="@+id/recentRow"
